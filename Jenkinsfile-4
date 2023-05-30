@@ -1,0 +1,16 @@
+pipeline {
+    agent any
+    environment {
+        IMAGE_NAME='kamleshw11/wine-park'
+        IMAGE_VERSION='v0.1'
+        COSIGN_PUBLIC_KEY = credentials('cosign-public-key')
+    }
+    stages{
+        stage('verify') {
+            steps {
+                sh 'cosign version'
+                sh 'cosign verify --key $COSIGN_PUBLIC_KEY ghcr.io/$IMAGE_NAME:$IMAGE_VERSION'
+            }
+        }
+    }    
+}
