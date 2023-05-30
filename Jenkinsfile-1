@@ -1,0 +1,73 @@
+pipeline {
+    agent any
+    tools{
+        maven 'MAVEN'
+    }
+    environment {
+        GITHUB_TOKEN=credentials('github-token')
+        IMAGE_NAME='java-app-image'
+        IMAGE_VERSION='v1.7'
+        COSIGN_PASSWORD=credentials('cosign-password')
+        AWS_CREDENTIALS = credentials('aws-credentials')
+        COSIGN_PRIVATE_KEY = credentials('cosign-private-key')
+    }
+    
+    stages {
+        stage('Checkout Code') {
+            steps {
+                checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[credentialsId: 'github-token', url: 'https://github.com/WinePark/wine-park.git']])
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean install -DskipTests'
+            }
+        }
+        
+        stage('authenticate your Docker client to ECR') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
+                    // Perform AWS operations using the AWS credentials
+                    sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 031251409634.dkr.ecr.us-east-1.amazonaws.com'
+                }
+            }
+        }
+        
+        stage('Build Image') {
+            steps {
+                // Build the Docker image
+                sh 'docker build -t $IMAGE_NAME:$IMAGE_VERSION .'
+                sh 'docker tag $IMAGE_NAME:$IMAGE_VERSION 031251409634.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_NAME:$IMAGE_VERSION'
+                sh 'docker push 031251409634.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_NAME:$IMAGE_VERSION'
+                script {
+                    // Execute Docker command and capture output
+                    def dockerOutput = sh(returnStdout: true, script: '''docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$IMAGE_VERSION ''')
+                    // Store the output in a variable
+                    def myVariable = dockerOutput.trim()
+                    env.DIGEST = myVariable
+                }
+            }
+        }
+        
+        stage('Sign image using cosign') {
+            steps {
+                // Check if the cosign.key and cosign.pub files exist
+                script {
+                    sh 'cosign version'
+                    // Access the value from the environment variable $DIGEST
+                    def keyExists = fileExists('cosign.key')
+                    def pubExists = fileExists('cosign.pub')
+                    if (keyExists && pubExists) {
+                        // Access the value from the environment variable $DIGEST
+                        // If the key and pub files exist, directly sign the image
+                        sh 'cosign sign --key $COSIGN_PRIVATE_KEY $DIGEST -y'
+                    } else {
+                        // If the key and pub files don't exist, generate them and then sign the image
+                        sh 'cosign generate-key-pair'
+                        sh 'cosign sign --key $COSIGN_PRIVATE_KEY $DIGEST -y'
+                    }
+                }
+            }
+        }
+    }    
+}
