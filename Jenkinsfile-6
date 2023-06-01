@@ -1,0 +1,18 @@
+pipeline {
+    agent any
+    environment {
+        IMAGE_NAME='java-app-image'
+        IMAGE_VERSION='v1.9'
+        AWS_CREDENTIALS = credentials('aws-credentials')
+        COSIGN_PUBLIC_KEY = credentials('cosign-public-key')
+        AWS_REGION='us-east-1'
+    }
+    stages{
+        stage('verify') {
+            steps {
+                sh 'cosign version'
+                sh 'cosign verify --key awskms:///alias/terakey 031251409634.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_NAME:$IMAGE_VERSION'
+            }
+        }
+    }    
+}
