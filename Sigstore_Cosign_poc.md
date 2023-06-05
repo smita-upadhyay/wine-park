@@ -4,7 +4,7 @@
 
 ### Softwares to be installed on EC2
 
-1. JRE
+1. JDK
 2. MAVEN ( as we are using java app to create an image)
 3. Docker
 4. Jenkins
@@ -73,7 +73,7 @@ cosign verify --key kms.pub <ECR URI with tag>
 
 ### Softwares to be installed on EC2
 
-1. JRE
+1. JDK
 2. MAVEN ( as we are using java app to create an image)
 3. Docker
 4. Jenkins
